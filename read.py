@@ -14,9 +14,8 @@ def get_minute_measure(child):
     measures = []
     while time.time() < end_time:
         child.sendline("char-write-cmd 0x10 5e")
-        time.sleep(.1)
 
-        child.expect("Notification handle.*", timeout=10)
+        child.expect("Notification handle.*", timeout=1)
         result = child.after.split(b'\r')[0]
 
         value = result.decode('ascii').split('value: ')[1]
@@ -37,6 +36,7 @@ def get_minute_measure(child):
         dba_noise = float(raw_value.decode('ascii'))
         print(dba_noise)
         measures.append(dba_noise)
+        time.sleep(.1)
     return {
         'min': min(measures),
         'max': max(measures),
@@ -73,8 +73,13 @@ print(f'Connecting to {DEVICE}')
 child.sendline(f'connect {DEVICE}')
 child.expect("Connection successful", timeout=5)
 print('Connected, Hell yeah ! !')
-time.sleep(1)
 child.sendline("char-write-req 0x14 01")
+warmup = True # try to avoid error on connection just after bluetooth was activated on device
+if warmup:
+    child.sendline("char-write-cmd 0x10 5e")
+    time.sleep(1)
+    child.sendline("char-write-cmd 0x10 5e")
+    time.sleep(1)
 
 try:
     while True:
@@ -82,12 +87,12 @@ try:
             stats = get_minute_measure(child)
         except Exception as e:
             print("Sleep - Error 1")
-            time.sleep(5)
+            time.sleep(1)
         try:
             send_stats(stats)
         except Exception as e:
             print("Sleep - Error 2")
-            time.sleep(5)
+            #time.sleep(5)
 finally:
     child.sendline('disconnect')
 
