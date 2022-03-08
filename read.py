@@ -13,7 +13,7 @@ def get_minute_measure(child):
     end_time = time.time()+10
     measures = []
     while time.time() < end_time:
-        child.sendline("char-write-cmd 0x25 5e")
+        child.sendline("char-write-cmd 0x10 5e")
         time.sleep(.1)
 
         child.expect("Notification handle.*", timeout=10)
@@ -73,8 +73,8 @@ print(f'Connecting to {DEVICE}')
 child.sendline(f'connect {DEVICE}')
 child.expect("Connection successful", timeout=5)
 print('Connected, Hell yeah ! !')
-
 time.sleep(1)
+child.sendline("char-write-req 0x14 01")
 
 try:
     while True:
