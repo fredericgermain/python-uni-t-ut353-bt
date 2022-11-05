@@ -52,23 +52,62 @@ def get_minute_measure(child, trigger_char):
     }
 
 
+OPEN_TSDB_HOST = os.environ.get('OPEN_TSDB_HOST')
+MQTT_BROKER = os.environ.get('MQTT_BROKER')
+hass_discovery_sent = False
+
 def send_stats(stats):
+    global hass_discovery_sent
     print(stats)
     now = int(time.time())
-    for key, value in stats.items():
-        pt = {
-            "metric": "noise.outside",
-            "timestamp": now,
-            "value": value,
-            "tags": {
-               "type": key,
+    if OPEN_TSDB_HOST:
+        for key, value in stats.items():
+            pt = {
+                "metric": "noise.outside",
+                "timestamp": now,
+                "value": value,
+                "tags": {
+                   "type": key,
+                }
             }
-        }
-        OPEN_TSDB_HOST = os.environ.get('OPEN_TSDB_HOST')
-        if OPEN_TSDB_HOST:
             url = f'http://{OPEN_TSDB_HOST}/api/put'
             print(url)
             r = requests.post(url, json=pt)
+    if MQTT_BROKER:
+        # inspired by https://github.com/fmartinou/teleinfo2mqtt
+        import paho.mqtt.client as mqtt
+        import paho.mqtt.publish as publish
+        import json
+        id = DEVICE_MAC.replace(':', '')
+        def discovery_hass_config(label):
+            return json.dumps({
+                'unique_id': f"uni-t_{id}_{label}",
+                'name': f"UNI-T {id} {label}",
+                'state_topic': f"uni-t/{id}",
+                'state_class': "measurement",
+                'device_class': "signal_strength",
+                'value_template': f"{{{{ value_json.{label} }}}}",
+                'unit_of_measurement': "dBA",
+                'device': {
+                    'identifiers': [id],
+                    'manufacturer': 'UNI-T',
+                    'model': 'UNI-T Mini Sound Meter',
+                    'name': f"UNI-T Mini Sound Meter {id}",
+                },
+            })
+        def discovery_hass_config_topic(label):
+            return f"{hass_discovery_prefix}/sensor/{mqtt_base_topic}_{id}/{label}/config"
+        if not hass_discovery_sent:
+            hass_discovery_prefix = 'homeassistant'
+            mqtt_base_topic = 'uni-t_mini_sound_meter'
+            msgs = list(map(lambda item: {'topic': discovery_hass_config_topic(item[0]), 'payload': discovery_hass_config(item[0])}, stats.items()))
+            # print(msgs)
+            publish.multiple(msgs, hostname=MQTT_BROKER)
+            hass_discovery_sent = True
+        topic = f"uni-t/{id}"
+        msg = json.dumps(stats)
+        # print(topic, msg)
+        publish.single(topic, msg, hostname=MQTT_BROKER)
 
 if len(sys.argv) == 2:
   DEVICE_MAC = sys.argv[1]
